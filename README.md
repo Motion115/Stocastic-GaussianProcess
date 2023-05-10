@@ -12,3 +12,8 @@ TBD
 
 Gaussian process
 
+### Reference
+
+https://github.com/gdroguski/GaussianProcesses
+
+https://gaussianprocess.org/
