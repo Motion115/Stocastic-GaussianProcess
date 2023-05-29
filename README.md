@@ -7,7 +7,7 @@
 For this project, we are yet to provide you with a specification list, but you can run the prompts line-by-line to get the dependencies ready.
 
 ```shell
-pip install pandas
+pip install pandas=1.5.3
 pip install matplotlib
 pip install scikit-learn
 pip install ipykernel
@@ -16,6 +16,7 @@ pip install ipywidgets
 pip install nbformat
 pip install torch (2.0.0+cu117 version, check official document when installing)
 pip install gpytorch
+pip install tqdm
 ```
 
 ### Structure
