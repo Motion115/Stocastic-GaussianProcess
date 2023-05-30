@@ -1,27 +1,39 @@
 import pandas as pd
 import numpy as np
+import torch
 
-class DataTransformer:
+class DataPreprocessor:
     '''
-    The objective of DataTransformer is to read raw data from csv file,
-    and transform it into a dictionary based, fixed length, year-wise data.
-
     The smallest grain for data retrival should be in quarters, 
     i.e. we can start from any quarter of any year, to start a standardized stock prediction process.
+
+    Parameters: 
+        - file_path: relative or absolute path
+        - file_name: must be a csv file
+        - start_quarter: <year>-Q<quarter>, e.g. 2018-Q3
+        - end_quarter: <year>-Q<quarter>, e.g. 2018-Q3, this quarter will be included
+        - mode: 'differential' or 'absolute'
     '''
-    def __init__(self, file_path: str, file_name: str):
+    def __init__(self, file_path: str, file_name: str, start_quarter: str, end_quarter: str, mode: str = 'differential'):
         data, trade_day, start_year, end_year = self.read_raw_data(file_path, file_name)
         self.data = data
         self.trade_day = trade_day
         self.start_year = start_year
         self.end_year = end_year
+        self.normalized_data = self.get_data(start_quarter, end_quarter, mode)
+        # print(self.normalized_data)
     
-    def get_data(self, start, end):
+    def get_data(self, start, end, mode):
         data_portion = self.get_data_portion(start, end)
-        # transform data_portion's each column
-        self.to_varience_data(data_portion)
+        if mode == 'differential':
+            returned_data = self.to_differential_data(data_portion)
+        elif mode == 'absolute':
+            returned_data = data_portion
+        else:
+            raise ValueError('mode can only be differential or absolute')
+        return returned_data
     
-    def to_varience_data(self, data_portion):
+    def to_differential_data(self, data_portion):
         # transform data_portion's each column
         # use the first entry as the base, and calculate the varience of each entry
         # we only do the transformation on part of the columns, i.e. 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume'
@@ -29,7 +41,6 @@ class DataTransformer:
         for col in ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']:
             # use map function to apply the transformation
             data_portion[col] = data_portion[col].map(lambda x: x - benchmark[col])
-        print(data_portion)
         return data_portion
 
     # input should be like 2018-Q3
@@ -62,6 +73,8 @@ class DataTransformer:
             end_index = self.data[(self.data['Year'] == user_end_year) & (self.data['Quarter'] == user_end_quarter)].index.tolist()[-1]
             # get a copy of the data between start_index and end_index
             data_portion = self.data.loc[start_index:end_index]
+            # refresh index
+            data_portion = data_portion.reset_index(drop=True)
             return data_portion
         else:
             raise ValueError('Input does not meet common sense!')
@@ -135,8 +148,82 @@ class DataTransformer:
         # return the truncated data, min_trading_day, start_year, end_year
         return truncated_data, min_trading_day, truncated_data['Year'].min(), truncated_data['Year'].max()
 
+
+class DataLoaderGtorch:
+    '''
+    Parameters:
+        - preprocessor: the data from class DataPreprocessor
+        - predictive_target: the target that we want to predict
+        - split_ratio: the ratio of training data to testing data (ratio is training data percentage)
+        - target_dtype: the data type of the target, 'torch' or 'numpy'
+    
+    Attributes:
+        - X_train: the training data
+        - y_train: the training target
+        - X_test: the testing data
+        - y_test: the testing target
+        - date_train: the date of training data (use for visualization)
+        - date_test: the date of testing data (use for visualization)
+    '''
+    def __init__(self, preprocessor: DataPreprocessor, predictive_target: str, split_ratio: float = 0.8, target_dtype: str = 'torch'):
+        self.preprocessor = preprocessor
+        def to_torch(data):
+            return torch.from_numpy(data).float()
+        X_train, y_train, X_test, y_test, date_train, date_test = self.get_column_traintest_split(predictive_target, split_ratio)
+        if target_dtype == 'torch':
+            self.X_train = to_torch(X_train)
+            self.y_train = to_torch(y_train)
+            self.X_test = to_torch(X_test)
+            self.y_test = to_torch(y_test)
+        else:
+            self.X_train = X_train
+            self.y_train = y_train
+            self.X_test = X_test
+            self.y_test = y_test
+        self.date_train = date_train
+        self.date_test = date_test
+        # print dataloader report
+        print("--- Dataloader report ---")
+        print("Time series data type is: ", target_dtype)
+        print("Training data shape: ", self.X_train.shape)
+        print("Testing data shape: ", self.X_test.shape)
+        print("-------------------------")
+    
+    def retrieve_data(self):
+        return self.X_train, self.y_train, self.X_test, self.y_test
+
+    
+    def get_column_traintest_split(self, predictive_target, split_ratio):
+        # check if the predictive_target is a column name in the data
+        if predictive_target not in self.preprocessor.data.columns[4:]:
+            raise ValueError("The predictive_target is not in the data!")
+        data = self.preprocessor.normalized_data
+        # get time_variable and y respectively
+        # time_variable is the index of the data, which is a list
+        time_vairable = data.index.values
+        # y is the predictive_target
+        y = data[predictive_target]
+
+        # concatenate year, month, day to a string
+        actual_dates = []
+        for year, month, day in zip(data['Year'], data['Month'], data['Day']):
+            actual_dates.append(str(year) + '-' + str(month) + '-' + str(day))
+        
+        # get split
+        split_pos = int(len(time_vairable) * split_ratio)
+        # get train and test
+        train_time_variable = np.array(time_vairable[:split_pos])
+        train_y = np.array(y[:split_pos])
+        test_time_variable = np.array(time_vairable[split_pos:])
+        test_y = np.array(y[split_pos:])
+        # also split the dates
+        train_actual_dates = actual_dates[:split_pos]
+        test_actual_dates = actual_dates[split_pos:]
+        # return the values
+        return train_time_variable, train_y, test_time_variable, test_y, train_actual_dates, test_actual_dates
+        
 if __name__ == '__main__':
     file_path = './data/'
     file_name = 'BA'
-    data_transformer = DataTransformer(file_path, file_name)
-    data_transformer.get_data('2010-Q3', '2012-Q4')
+    preprocessed_data = DataPreprocessor(file_path, file_name, '2008-Q3', '2012-Q4')
+    dataloader = DataLoaderGtorch(preprocessed_data, 'Open', 0.8, "torch")
