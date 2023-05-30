@@ -12,74 +12,16 @@ class DataPreprocessor:
         - file_name: must be a csv file
         - start_quarter: <year>-Q<quarter>, e.g. 2018-Q3
         - end_quarter: <year>-Q<quarter>, e.g. 2018-Q3, this quarter will be included
-        - mode: 'differential' or 'absolute'
+        - mode: 'centerize' or 'absolute'
     '''
-    def __init__(self, file_path: str, file_name: str, start_quarter: str, end_quarter: str, mode: str = 'differential'):
-        data, trade_day, start_year, end_year = self.read_raw_data(file_path, file_name)
+    def __init__(self, file_path: str, file_name: str, report = False):
+        data, trade_day, start_year, end_year = self.read_raw_data(file_path, file_name, report)
         self.data = data
         self.trade_day = trade_day
         self.start_year = start_year
         self.end_year = end_year
-        self.normalized_data = self.get_data(start_quarter, end_quarter, mode)
-        # print(self.normalized_data)
-    
-    def get_data(self, start, end, mode):
-        data_portion = self.get_data_portion(start, end)
-        if mode == 'differential':
-            returned_data = self.to_differential_data(data_portion)
-        elif mode == 'absolute':
-            returned_data = data_portion
-        else:
-            raise ValueError('mode can only be differential or absolute')
-        return returned_data
-    
-    def to_differential_data(self, data_portion):
-        # transform data_portion's each column
-        # use the first entry as the base, and calculate the varience of each entry
-        # we only do the transformation on part of the columns, i.e. 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume'
-        benchmark = data_portion.iloc[0]
-        for col in ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']:
-            # use map function to apply the transformation
-            data_portion[col] = data_portion[col].map(lambda x: x - benchmark[col])
-        return data_portion
 
-    # input should be like 2018-Q3
-    def get_data_portion(self, start:str, end:str):
-        def check_input(in_str: str):
-            # parse start and end, with format of year(4 digits) + quarter(1 digit)
-            year = int(in_str[:4])
-            padding = in_str[4:6]
-            quarter = int(in_str[6:])
-            if padding != '-Q' or quarter not in [1, 2, 3, 4] or year not in range(self.start_year, self.end_year + 1):
-                raise ValueError('Input format error, please check your input.')
-            else:
-                return year, quarter
-        user_start_year, user_start_quarter = check_input(start)
-        user_end_year, user_end_quarter = check_input(end)
-        def check_effectiveness(start_year, start_quarter, end_year, end_quarter):
-            if start_year > end_year:
-                raise ValueError('Start year should be earlier than end year.')
-            elif start_year == end_year:
-                if start_quarter > end_quarter:
-                    raise ValueError('Start quarter should be earlier than end quarter.')
-                else:
-                    return True
-            else:
-                return True
-        if check_effectiveness(user_start_year, user_start_quarter, user_end_year, user_end_quarter):
-            # get the index of the first entry that matches the start year and quarter
-            start_index = self.data[(self.data['Year'] == user_start_year) & (self.data['Quarter'] == user_start_quarter)].index.tolist()[0]
-            # get the index of the last entry that matches the end year and quarter
-            end_index = self.data[(self.data['Year'] == user_end_year) & (self.data['Quarter'] == user_end_quarter)].index.tolist()[-1]
-            # get a copy of the data between start_index and end_index
-            data_portion = self.data.loc[start_index:end_index]
-            # refresh index
-            data_portion = data_portion.reset_index(drop=True)
-            return data_portion
-        else:
-            raise ValueError('Input does not meet common sense!')
-
-    def read_raw_data(self, file_path, file_name):
+    def read_raw_data(self, file_path, file_name, report):
         raw_data = pd.read_csv(file_path + file_name + '.csv')
         # the columns for raw_data are ['Date', 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
         # Task1: the 'Date' column's storage is not aligned with 3NF of database
@@ -134,10 +76,11 @@ class DataPreprocessor:
         5. Every year is a full year
         '''
         # give a report on the preprocessed data
-        print("--- Data preorocess report ---")
-        print("Trading days for each quarter is:", min_trading_day)
-        print("Original data items: {}, Truncated data items:{}".format(raw_data.shape[0],truncated_data.shape[0]))
-        print("------------------------------")
+        if report:
+            print("--- Data preorocess report ---")
+            print("Trading days for each quarter is:", min_trading_day)
+            print("Original data items: {}, Truncated data items:{}".format(raw_data.shape[0],truncated_data.shape[0]))
+            print("------------------------------")
 
         # check if the year is continuous
         for year in range(truncated_data['Year'].min(), truncated_data['Year'].max()):
@@ -154,7 +97,7 @@ class DataLoaderGtorch:
     Parameters:
         - preprocessor: the data from class DataPreprocessor
         - predictive_target: the target that we want to predict
-        - split_ratio: the ratio of training data to testing data (ratio is training data percentage)
+        - test_cases: the ratio of training data to testing data (ratio is training data percentage)
         - target_dtype: the data type of the target, 'torch' or 'numpy'
     
     Attributes:
@@ -165,11 +108,14 @@ class DataLoaderGtorch:
         - date_train: the date of training data (use for visualization)
         - date_test: the date of testing data (use for visualization)
     '''
-    def __init__(self, preprocessor: DataPreprocessor, predictive_target: str, split_ratio: float = 0.8, target_dtype: str = 'torch'):
+    def __init__(self, preprocessor, start_quarter: str, end_quarter: str, predictive_target: str, mode: str = 'centerize', test_cases: int = 5, target_dtype: str = 'torch', report = False):
         self.preprocessor = preprocessor
+        self.data = self.preprocessor.data
+        self.normalized_data = self.get_data(start_quarter, end_quarter, mode)
+        self.duration = len(self.normalized_data)
         def to_torch(data):
             return torch.from_numpy(data).float()
-        X_train, y_train, X_test, y_test, date_train, date_test = self.get_column_traintest_split(predictive_target, split_ratio)
+        X_train, y_train, X_test, y_test, date_train, date_test = self.get_column_traintest_split(predictive_target, test_cases)
         if target_dtype == 'torch':
             self.X_train = to_torch(X_train)
             self.y_train = to_torch(y_train)
@@ -182,22 +128,79 @@ class DataLoaderGtorch:
             self.y_test = y_test
         self.date_train = date_train
         self.date_test = date_test
-        # print dataloader report
-        print("--- Dataloader report ---")
-        print("Time series data type is: ", target_dtype)
-        print("Training data shape: ", self.X_train.shape)
-        print("Testing data shape: ", self.X_test.shape)
-        print("-------------------------")
+        if report:
+            # print dataloader report
+            print("--- Dataloader report ---")
+            print("Time series data type is: ", target_dtype)
+            print("Training data shape: ", self.X_train.shape)
+            print("Testing data shape: ", self.X_test.shape)
+            print("-------------------------")
+    
+    def get_data(self, start, end, mode):
+        data_portion = self.get_data_portion(start, end)
+        if mode == 'centerize':
+            returned_data = self.centerize_data(data_portion)
+        elif mode == 'absolute':
+            returned_data = data_portion
+        else:
+            raise ValueError('mode can only be centerize or absolute')
+        return returned_data
+    
+    def centerize_data(self, data_portion):
+        # transform data_portion's each column
+        # we only do the transformation on part of the columns, i.e. 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume'
+        for col in ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']:
+            # get the benchmark value, which is the mean of the data in the columns
+            benchmark = data_portion[col].mean()
+            # use map function to apply the transformation
+            data_portion[col] = data_portion[col].map(lambda x: (x - benchmark) / benchmark)
+        return data_portion
+
+    # input should be like 2018-Q3
+    def get_data_portion(self, start:str, end:str):
+        def check_input(in_str: str):
+            # parse start and end, with format of year(4 digits) + quarter(1 digit)
+            year = int(in_str[:4])
+            padding = in_str[4:6]
+            quarter = int(in_str[6:])
+            if padding != '-Q' or quarter not in [1, 2, 3, 4] or year not in range(self.preprocessor.start_year, self.preprocessor.end_year + 1):
+                raise ValueError('Input format error, please check your input.')
+            else:
+                return year, quarter
+        user_start_year, user_start_quarter = check_input(start)
+        user_end_year, user_end_quarter = check_input(end)
+        def check_effectiveness(start_year, start_quarter, end_year, end_quarter):
+            if start_year > end_year:
+                raise ValueError('Start year should be earlier than end year.')
+            elif start_year == end_year:
+                if start_quarter > end_quarter:
+                    raise ValueError('Start quarter should be earlier than end quarter.')
+                else:
+                    return True
+            else:
+                return True
+        if check_effectiveness(user_start_year, user_start_quarter, user_end_year, user_end_quarter):
+            # get the index of the first entry that matches the start year and quarter
+            start_index = self.data[(self.data['Year'] == user_start_year) & (self.data['Quarter'] == user_start_quarter)].index.tolist()[0]
+            # get the index of the last entry that matches the end year and quarter
+            end_index = self.data[(self.data['Year'] == user_end_year) & (self.data['Quarter'] == user_end_quarter)].index.tolist()[-1]
+            # get a copy of the data between start_index and end_index
+            data_portion = self.data.loc[start_index:end_index]
+            # refresh index
+            data_portion = data_portion.reset_index(drop=True)
+            return data_portion
+        else:
+            raise ValueError('Input does not meet common sense!')
     
     def retrieve_data(self):
         return self.X_train, self.y_train, self.X_test, self.y_test
 
     
-    def get_column_traintest_split(self, predictive_target, split_ratio):
+    def get_column_traintest_split(self, predictive_target, overlook_days):
         # check if the predictive_target is a column name in the data
-        if predictive_target not in self.preprocessor.data.columns[4:]:
+        if predictive_target not in self.normalized_data.columns[4:]:
             raise ValueError("The predictive_target is not in the data!")
-        data = self.preprocessor.normalized_data
+        data = self.normalized_data
         # get time_variable and y respectively
         # time_variable is the index of the data, which is a list
         time_vairable = data.index.values
@@ -210,7 +213,7 @@ class DataLoaderGtorch:
             actual_dates.append(str(year) + '-' + str(month) + '-' + str(day))
         
         # get split
-        split_pos = int(len(time_vairable) * split_ratio)
+        split_pos = int(len(time_vairable) - overlook_days)
         # get train and test
         train_time_variable = np.array(time_vairable[:split_pos])
         train_y = np.array(y[:split_pos])
@@ -225,5 +228,5 @@ class DataLoaderGtorch:
 if __name__ == '__main__':
     file_path = './data/'
     file_name = 'BA'
-    preprocessed_data = DataPreprocessor(file_path, file_name, '2008-Q3', '2012-Q4')
-    dataloader = DataLoaderGtorch(preprocessed_data, 'Open', 0.8, "torch")
+    preprocessed_data = DataPreprocessor(file_path, file_name)
+    dataloader = DataLoaderGtorch(preprocessed_data,'2012-Q4', '2012-Q4', 'Close', report=True)

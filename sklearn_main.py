@@ -34,8 +34,8 @@ if __name__ == '__main__':
     # also calculate the confidence interval
     pred_y, y_std = gpr.predict(x, return_std=True)
     # calculate the confidence bound
-    lower_bound = pred_y - 1.96 * y_std
-    upper_bound = pred_y + 1.96 * y_std
+    lower_bound = pred_y - y_std
+    upper_bound = pred_y + y_std
 
-    plot_result(x, y, pred_y, lower_bound, upper_bound)
+    plot_result(x, y, pred_y, lower_bound, upper_bound, len(train_x))
 
