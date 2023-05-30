@@ -8,8 +8,9 @@ import numpy as np
 
 if __name__ == '__main__':
     file_path, file_name = './data/', 'BA'
-    preprocessed_data = DataPreprocessor(file_path, file_name, '2008-Q3', '2016-Q4')
-    dataloader = DataLoaderGtorch(preprocessed_data, 'Open', 0.8, "numpy")
+    quarter = "2016-Q4"
+    preprocessed_data = DataPreprocessor(file_path, file_name)
+    dataloader = DataLoaderGtorch(preprocessed_data, quarter, quarter, 'Close', test_cases=3, target_dtype='numpy')
     train_x, train_y, test_x, test_y = dataloader.retrieve_data()
 
     # concate train_x and test_x
@@ -23,19 +24,21 @@ if __name__ == '__main__':
     y = y.reshape(-1, 1)
 
     # kernel = 1.0 * Matern(length_scale=1.0, length_scale_bounds=(1e-1, 10.0), nu=1.5)
-    kernel = DotProduct()
+    # kernel = DotProduct()
     gpr = GaussianProcessRegressor(
-        kernel = kernel, 
+        #kernel = kernel, 
         random_state=0,
         alpha = 0.1
         ).fit(train_x, train_y)
+
     print(gpr.score(train_x, train_y))
+
 
     # also calculate the confidence interval
     pred_y, y_std = gpr.predict(x, return_std=True)
     # calculate the confidence bound
-    lower_bound = pred_y - y_std
-    upper_bound = pred_y + y_std
+    lower_bound = pred_y - 0.3 * y_std
+    upper_bound = pred_y + 0.3 * y_std
 
     plot_result(x, y, pred_y, lower_bound, upper_bound, len(train_x))
 

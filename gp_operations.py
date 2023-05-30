@@ -7,19 +7,26 @@ from data_processor import DataPreprocessor, DataLoaderGtorch
 from utils import save_plot
 
 class ExactGPModel(gpytorch.models.ExactGP):
-    def __init__(self, train_x, train_y, likelihood):
+    def __init__(self, train_x, train_y, likelihood, kernel_option):
         super(ExactGPModel, self).__init__(train_x, train_y, likelihood)
+        kernel_options = {
+            'RQ': gpytorch.kernels.RQKernel(),
+            'Matern': gpytorch.kernels.MaternKernel(),
+            'RBF': gpytorch.kernels.RBFKernel(),
+            'Linear': gpytorch.kernels.LinearKernel(),
+            'Combined': gpytorch.kernels.RQKernel() + gpytorch.kernels.MaternKernel(),
+        }
         self.mean_module = gpytorch.means.ConstantMean()
         self.covar_module = gpytorch.kernels.ScaleKernel(
-            gpytorch.kernels.RQKernel()
-            )
+            kernel_options[kernel_option]        
+        )
 
     def forward(self, x):
         mean_x = self.mean_module(x)
         covar_x = self.covar_module(x)
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
-def train_eval(dataloader, file_name, start_period, iters = 100):  
+def train_eval(dataloader, file_name, start_period, kernel_option, iters = 100):  
     duration = dataloader.duration
     train_x, train_y, test_x, test_y = dataloader.retrieve_data()
     predict_length = test_x.shape[0]
@@ -30,7 +37,7 @@ def train_eval(dataloader, file_name, start_period, iters = 100):
     
     # initialize likelihood and model
     likelihood = gpytorch.likelihoods.GaussianLikelihood()
-    model = ExactGPModel(train_x, train_y, likelihood)
+    model = ExactGPModel(train_x, train_y, likelihood, kernel_option)
 
     # check if cuda is available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -50,7 +57,7 @@ def train_eval(dataloader, file_name, start_period, iters = 100):
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
 
     training_iter = iters
-    # for i in tqdm(range(training_iter)):
+    #for i in tqdm(range(training_iter)):
     for i in range(training_iter):
         # Zero gradients from previous iteration
         optimizer.zero_grad()
@@ -90,7 +97,7 @@ def train_eval(dataloader, file_name, start_period, iters = 100):
         mean = mean.cpu().numpy()
         lower = lower.cpu().numpy()
         upper = upper.cpu().numpy()
-        #save_plot(x, y, mean, lower, upper, len(train_x), target_dir, title, subtitle)
+        save_plot(x, y, mean, lower, upper, len(train_x), target_dir, title, subtitle)
 
     # metrics drop to CPU, then turn to float
     mae = mae.cpu().numpy().item()
@@ -104,7 +111,7 @@ if __name__ == '__main__':
     quarter = "2016-Q4"
     preprocessed_data = DataPreprocessor(file_path, file_name)
     dataloader = DataLoaderGtorch(preprocessed_data, quarter, quarter, 'Close', test_cases=3)
-    mae, mse, r2 = train_eval(dataloader, file_name, quarter)
+    mae, mse, r2 = train_eval(dataloader, file_name, quarter, kernel_option='Combined')
     print(mae, mse, r2)
     
     
