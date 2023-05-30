@@ -4,12 +4,15 @@ import gpytorch
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 from data_processor import DataPreprocessor, DataLoaderGtorch
+from utils import plot_result
 
 class ExactGPModel(gpytorch.models.ExactGP):
     def __init__(self, train_x, train_y, likelihood):
         super(ExactGPModel, self).__init__(train_x, train_y, likelihood)
         self.mean_module = gpytorch.means.ConstantMean()
-        self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
+        self.covar_module = gpytorch.kernels.ScaleKernel(
+            gpytorch.kernels.RQKernel()
+            )
 
     def forward(self, x):
         mean_x = self.mean_module(x)
@@ -18,10 +21,13 @@ class ExactGPModel(gpytorch.models.ExactGP):
     
 if __name__ == '__main__':
     file_path, file_name = './data/', 'BA'
-    preprocessed_data = DataPreprocessor(file_path, file_name, '2008-Q3', '2012-Q4')
+    preprocessed_data = DataPreprocessor(file_path, file_name, '2016-Q1', '2016-Q4')
     dataloader = DataLoaderGtorch(preprocessed_data, 'Open', 0.8, "torch")
     train_x, train_y, test_x, test_y = dataloader.retrieve_data()
-
+    # concatenate train_x and test_x in torch
+    x = torch.cat((train_x, test_x), dim=0)
+    y = torch.cat((train_y, test_y), dim=0)
+    
     # initialize likelihood and model
     likelihood = gpytorch.likelihoods.GaussianLikelihood()
     model = ExactGPModel(train_x, train_y, likelihood)
@@ -31,7 +37,7 @@ if __name__ == '__main__':
     model = model.to(device)
     likelihood = likelihood.to(device)
     train_x, train_y = train_x.to(device), train_y.to(device)
-    test_x, test_y = test_x.to(device), test_y.to(device)
+    x, y = x.to(device), y.to(device)
 
     # Find optimal model hyperparameters
     model.train()
@@ -60,22 +66,19 @@ if __name__ == '__main__':
     likelihood.eval()
 
     with torch.no_grad(), gpytorch.settings.fast_pred_var():
-        observed_pred = likelihood(model(test_x))
+        observed_pred = likelihood(model(x))
         mean = observed_pred.mean
         lower, upper = observed_pred.confidence_region()
-        print('Test MAE: {}'.format(torch.mean(torch.abs(mean - test_y))))
+        # print('Test MAE: {}'.format(torch.mean(torch.abs(mean - test_y))))
     
     # Plot the results
     with torch.no_grad():
-        # Initialize plot
-        f, ax = plt.subplots(1, 1, figsize=(4, 3))
-        # Get upper and lower confidence bounds
-        lower, upper = observed_pred.confidence_region()
-        # Plot training data as black stars
-        ax.plot(train_x.cpu().numpy(), train_y.cpu().numpy(), 'r')
-        # Plot predictive means as blue line
-        ax.plot(test_x.cpu().numpy(), mean.cpu().numpy(), 'b')
-        # Shade between the lower and upper confidence bounds
-        ax.fill_between(test_x.cpu().numpy(), lower.cpu().numpy(), upper.cpu().numpy(), alpha=0.5)
-        ax.legend(['Observed Data', 'Mean', 'Confidence'])
-        plt.show()
+        # detach the tensor from GPU to CPU
+        x = x.cpu().numpy()
+        y = y.cpu().numpy()
+        mean = mean.cpu().numpy()
+        lower = lower.cpu().numpy()
+        upper = upper.cpu().numpy()
+        plot_result(x, y, mean, lower, upper, len(train_x))
+
+
