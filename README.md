@@ -61,7 +61,6 @@ Also, I have compared different Kernel functions (or covariance functions). I ha
 ![](./result-presentation/bad_case.png)
 
 Besides, my model does not fare well in predicting long-term results. I believe this is in line with the Gaussian Process assumption that the data is a normal distribution.
-$$
-N \sim (0, \sigma^2)
-$$
+$$ N \sim (0, \sigma^2) $$
+
 ![](./result-presentation/long_term.png)
