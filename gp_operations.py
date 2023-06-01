@@ -57,8 +57,8 @@ def train_eval(dataloader, file_name, start_period, kernel_option, iters = 100):
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
 
     training_iter = iters
-    #for i in tqdm(range(training_iter)):
-    for i in range(training_iter):
+    for i in tqdm(range(training_iter)):
+    #for i in range(training_iter):
         # Zero gradients from previous iteration
         optimizer.zero_grad()
         # Output from model
@@ -108,10 +108,10 @@ def train_eval(dataloader, file_name, start_period, kernel_option, iters = 100):
     
 if __name__ == '__main__':
     file_path, file_name = './data/', 'BA'
-    quarter = "2016-Q4"
+    quarter_s, quarter_e = "2005-Q1", "2010-Q4"
     preprocessed_data = DataPreprocessor(file_path, file_name)
-    dataloader = DataLoaderGtorch(preprocessed_data, quarter, quarter, 'Close', test_cases=3)
-    mae, mse, r2 = train_eval(dataloader, file_name, quarter, kernel_option='Combined')
+    dataloader = DataLoaderGtorch(preprocessed_data, quarter_s, quarter_e, 'Adj Close', test_cases=200)
+    mae, mse, r2 = train_eval(dataloader, file_name, "2005-2010", kernel_option='Matern', iters=500)
     print(mae, mse, r2)
     
     

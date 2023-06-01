@@ -33,7 +33,10 @@ def save_plot(x, y, pred_y, lower_bound, upper_bound, start_of_pred, save_path, 
     ax.fill_between(x, lower_bound, upper_bound, alpha=0.5)
     # add a vertical line to indicate the start of prediction
     ax.axvline(x=start_of_pred, color='r', linestyle='--')
-    ax.legend(['Actual', 'Predicted', 'Confidence', 'split'])
+    # ax.legend(['Actual', 'Predicted', 'Confidence', 'Split'])
+    # add a horizontal line to indicate the mean of y
+    ax.axhline(y=np.mean(y), color='salmon', linestyle='--')
+    ax.legend(['Actual', 'Predicted', 'Confidence', 'Split', 'Mean'])
     # plt.show()
     # save the figure
     f.savefig(save_path, dpi=180)
