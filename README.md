@@ -7,7 +7,7 @@
 For this project, we are yet to provide you with a specification list, but you can run the prompts line-by-line to get the dependencies ready.
 
 ```shell
-pip install pandas=1.5.3
+pip install pandas
 pip install matplotlib
 pip install scikit-learn
 pip install ipykernel
