@@ -46,7 +46,7 @@ From [Roguski's repo](https://github.com/gdroguski/GaussianProcesses). Roguski's
 
 ### Tasks & Results
 
-In this implementation, I tried to predict stock price variance in 5 days. Preprocessing include centering and unifying the trading days for each quarter. Please refer to the code for details.
+In this implementation, I tried to predict stock price(Adj Close) variance in 5 days. Adj Close is the price that has been adjusted to eliminate the variance in stock prices due to events like stock splitting etc. Preprocessing include centering and unifying the trading days for each quarter. Please refer to the code for details.
 
 Also, I have compared different Kernel functions (or covariance functions). I have picked out one good case and a bad case to show you the gist.
 
