@@ -17,6 +17,12 @@ pip install nbformat
 pip install torch (2.0.0+cu117 version, check official document when installing)
 pip install gpytorch
 pip install tqdm
+
+# for running extra experiments(for volt)
+pip install botorch
+pip install robin_stocks
+pip install python-dotenv
+pip install yfinance
 ```
 
 ### Before you run the code
@@ -63,3 +69,7 @@ Also, I have compared different Kernel functions (or covariance functions). I ha
 Besides, my model does not fare well in predicting long-term results. I believe this is in line with the Gaussian Process assumption that the data is a normal distribution.
 
 ![](./result-presentation/long_term.png)
+
+### Further reading
+
+I believe some of the issues that I encounter could be solved with newer advances in this field. I have yet to try [Volt](https://github.com/g-benton/volt), but it seems a promising solution to longer term estimations.

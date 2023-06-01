@@ -15,11 +15,16 @@ class ExactGPModel(gpytorch.models.ExactGP):
             'RBF': gpytorch.kernels.RBFKernel(),
             'Linear': gpytorch.kernels.LinearKernel(),
             'Combined': gpytorch.kernels.RQKernel() + gpytorch.kernels.MaternKernel(),
+            'Spectural': gpytorch.kernels.SpectralMixtureKernel(num_mixtures=30),
+            'Arc': gpytorch.kernels.ArcKernel(gpytorch.kernels.RBFKernel())
         }
         self.mean_module = gpytorch.means.ConstantMean()
-        self.covar_module = gpytorch.kernels.ScaleKernel(
-            kernel_options[kernel_option]        
-        )
+        if kernel_option != 'Spectural':
+            self.covar_module = gpytorch.kernels.ScaleKernel(
+                kernel_options[kernel_option]        
+            )
+        else:
+            self.covar_module = kernel_options[kernel_option]
 
     def forward(self, x):
         mean_x = self.mean_module(x)
@@ -108,10 +113,10 @@ def train_eval(dataloader, file_name, start_period, kernel_option, iters = 100):
     
 if __name__ == '__main__':
     file_path, file_name = './data/', 'BA'
-    quarter_s, quarter_e = "2005-Q1", "2010-Q4"
+    quarter_s, quarter_e = "2012-Q4", "2012-Q4"
     preprocessed_data = DataPreprocessor(file_path, file_name)
-    dataloader = DataLoaderGtorch(preprocessed_data, quarter_s, quarter_e, 'Adj Close', test_cases=200)
-    mae, mse, r2 = train_eval(dataloader, file_name, "2005-2010", kernel_option='Matern', iters=500)
+    dataloader = DataLoaderGtorch(preprocessed_data, quarter_s, quarter_e, 'Adj Close', test_cases=5)
+    mae, mse, r2 = train_eval(dataloader, file_name, quarter_s, kernel_option='Matern', iters=150)
     print(mae, mse, r2)
     
     
